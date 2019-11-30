@@ -15,15 +15,6 @@ let
       # non-matching part), otherwise they return null.
       matchWhitespace = string: match "([[:space:]]+)(.*)" string;
       matchComment = string: match "(;[^\n]*[\n])(.*)" string;
-      matchOpenParen = string: match "([(])(.*)" string;
-      matchCloseParen = string: match "([)])(.*)" string;
-      matchOpenBracket = string: match "([[])(.*)" string;
-      matchCloseBracket = string: match "([]])(.*)" string;
-      matchQuote = string: match ''(')(.*)'' string;
-      matchBackquote = string: match ''(`)(.*)'' string;
-      matchExpand = string: match ''(,)([^@].*)'' string;
-      matchSlice = string: match ''(,@)(.*)'' string;
-      matchFunction = string: match ''(#')(.*)'' string;
       matchString = string:
         let
           matchedString = match ''("([^"\\]|\\.)*")(.*)'' string;
@@ -51,7 +42,7 @@ let
           if character != null then [(head character) (elemAt character (len - 2))] else null;
       matchNonBase10Integer = string:
         let
-          integer = match ''([+-]?#?([BOX]|[[:digit:]]{1,2}r)[[:digit:]a-fA-F]+)(([${notInSymbol}]|$).*)'' string;
+          integer = match ''(#([BOX]|[[:digit:]]{1,2}r)[[:digit:]a-fA-F]+)(([${notInSymbol}]|$).*)'' string;
           len = length integer;
         in
           if integer != null then [(head integer) (elemAt integer (len - 2))] else null;
@@ -99,147 +90,146 @@ let
         let
           whitespace = matchWhitespace rest;
           comment = matchComment rest;
-          openParen = matchOpenParen rest;
-          closeParen = matchCloseParen rest;
-          openBracket = matchOpenBracket rest;
-          closeBracket = matchCloseBracket rest;
           character = matchCharacter rest;
           nonBase10Integer = matchNonBase10Integer rest;
           integer = matchInteger rest;
           float = matchFloat rest;
-          quote = matchQuote rest;
-          backquote = matchBackquote rest;
-          expand = matchExpand rest;
-          slice = matchSlice rest;
           function = matchFunction rest;
           string = matchString rest;
           dot = matchDot rest;
           symbol = matchSymbol rest;
+          countNewlines = string: count (p: p == "\n") (stringToCharacters string);
+
+          nextChar = substring 0 1 rest;
+          len = stringLength rest;
         in
-          if whitespace != null then
-            recurse { acc = (acc ++ [
-                        { type = "whitespace"; value = (head whitespace); inherit line; }
-                      ]);
-                      rest = (elemAt whitespace 1);
-                      line = line;
-                    }
-          else if comment != null then
-            recurse { acc = (acc ++ [
-                        { type = "comment"; value = (head comment); inherit line; }
-                      ]);
-                      rest = (elemAt comment 1);
-                      line = (line + 1);
-                    }
-          else if openParen != null then
+          if nextChar == " " || nextChar == "\n" || nextChar == "\t" || nextChar == "\r" then
             recurse {
-              acc = acc ++ [{ type = "openParen"; value = (head openParen); inherit line; }];
-              rest = (elemAt openParen 1);
+              acc = (acc ++ [{ type = "whitespace"; value = (head whitespace); inherit line; }]);
+              rest = (elemAt whitespace 1);
+              line = (line + countNewlines (head whitespace));
+            }
+          else if nextChar == ";" then
+            recurse {
+              acc = (acc ++ [{ type = "comment"; value = (head comment); inherit line; }]);
+              rest = (elemAt comment 1);
+              line = (line + 1);
+            }
+          else if nextChar == "(" then
+            recurse {
+              acc = acc ++ [{ type = "openParen"; value = "("; inherit line; }];
+              rest = substring 1 (len - 1) rest;
               line = line;
             }
-          else if closeParen != null then
-            recurse { acc = (acc ++ [
-                        { type = "closeParen"; value = (head closeParen); inherit line; }
-                      ]);
-                      rest = (elemAt closeParen 1);
-                      line = line;
-                    }
-          else if quote != null then
-            recurse { acc = (acc ++ [
-                        { type = "quote"; value = (head quote); inherit line; }
-                      ]);
-                      rest = (elemAt quote 1);
-                      line = line;
-                    }
-          else if string != null then
-            recurse { acc = (acc ++ [
-                        { type = "string"; value = (head string); inherit line; }
-                      ]);
-                      rest = (elemAt string 1);
-                      line = line;
-                    }
-          else if function != null then
-            recurse { acc = (acc ++ [
-                        { type = "function"; value = (head function); inherit line; }
-                      ]);
-                      rest = (elemAt function 1);
-                      line = line;
-                    }
-          else if integer != null then
-            recurse { acc = (acc ++ [
-                        { type = "integer"; value = (head integer); inherit line; }
-                      ]);
-                      rest = (elemAt integer 1);
-                      line = line;
-                    }
-          else if float != null then
-            recurse { acc = (acc ++ [
-                        { type = "float"; value = (head float); inherit line; }
-                      ]);
-                      rest = (elemAt float 1);
-                      line = line;
-                    }
-          else if openBracket != null then
-            recurse { acc = (acc ++ [
-                        { type = "openBracket"; value = (head openBracket); inherit line; }
-                      ]);
-                      rest = (elemAt openBracket 1);
-                      line = line;
-                    }
-          else if closeBracket != null then
-            recurse { acc = (acc ++ [
-                        { type = "closeBracket"; value = (head closeBracket); inherit line; }
-                      ]);
-                      rest = (elemAt closeBracket 1);
-                      line = line;
-                    }
-          else if dot != null then
-            recurse { acc = (acc ++ [
-                        { type = "dot"; value = (head dot); inherit line; }
-                      ]);
-                      rest = (elemAt dot 1);
-                      line = line;
-                    }
-          else if character != null then
+          else if nextChar == ")" then
+            recurse {
+              acc = (acc ++ [{ type = "closeParen"; value = ")"; inherit line; }]);
+              rest = substring 1 (len - 1) rest;
+              line = line;
+            }
+          else if nextChar == "[" then
+            recurse {
+              acc = (acc ++ [{ type = "openBracket"; value = "["; inherit line; }]);
+              rest = substring 1 (len - 1) rest;
+              line = line;
+            }
+          else if nextChar == "]" then
+            recurse {
+              acc = (acc ++ [{ type = "closeBracket"; value = "]"; inherit line; }]);
+              rest = substring 1 (len - 1) rest;
+              line = line;
+            }
+          else if nextChar == "'" then
+            recurse {
+              acc = (acc ++ [
+                { type = "quote"; value = "'"; inherit line; }
+              ]);
+              rest = substring 1 (len - 1) rest;
+              line = line;
+            }
+          else if nextChar == ''"'' then
+            recurse {
+              acc = (acc ++ [{ type = "string"; value = (head string); inherit line; }]);
+              rest = (elemAt string 1);
+              line = (line + countNewlines (head string));
+            }
+          else if nextChar == "#" then
+            if substring 1 1 rest == "'" then
+              recurse {
+                acc = (acc ++ [{ type = "function"; value = "#'"; inherit line; }]);
+                rest = substring 2 (len - 1) rest;
+                line = line;
+              }
+            else if nonBase10Integer != null then
+              recurse {
+                acc = (acc ++ [{ type = "nonBase10Integer"; value = (head nonBase10Integer); inherit line; }]);
+                rest = (elemAt nonBase10Integer 1);
+                line = line;
+              }
+            else throw "Unrecognized token ${substring 1 1 rest} on line ${toString line}"
+          else if nextChar == "+" || nextChar == "-" || nextChar == "."
+                  || nextChar == "0" || nextChar == "1" || nextChar == "2" || nextChar == "3"
+                  || nextChar == "4" || nextChar == "5" || nextChar == "6" || nextChar == "7"
+                  || nextChar == "8" || nextChar == "9" then
+            if integer != null then
+              recurse {
+                acc = (acc ++ [{ type = "integer"; value = (head integer); inherit line; }]);
+                rest = (elemAt integer 1);
+                line = line;
+              }
+            else if float != null then
+              recurse {
+                acc = (acc ++ [{ type = "float"; value = (head float); inherit line; }]);
+                rest = (elemAt float 1);
+                line = line;
+              }
+            else if dot != null then
+              recurse {
+                acc = (acc ++ [{ type = "dot"; value = (head dot); inherit line; }]);
+                rest = (elemAt dot 1);
+                line = line;
+              }
+            else if symbol != null then
+              recurse {
+                acc = (acc ++ [{ type = "symbol"; value = (head symbol); inherit line; }]);
+                rest = (elemAt symbol 1);
+                line = (line + countNewlines (head symbol)); # Yup, symbol names can contain newlines, if escaped...
+              }
+            else throw "Unrecognized token ${substring 1 1 rest} on line ${toString line}"
+          else if nextChar == "?" then
+            if character != null then
             recurse { acc = (acc ++ [
                         { type = "character"; value = (head character); inherit line; }
                       ]);
                       rest = (elemAt character 1);
-                      line = line;
+                      line = (line + countNewlines (head character));
                     }
-          else if nonBase10Integer != null then
-            recurse { acc = (acc ++ [
-                        { type = "nonBase10Integer"; value = (head nonBase10Integer); inherit line; }
-                      ]);
-                      rest = (elemAt nonBase10Integer 1);
-                      line = line;
-                    }
-          else if backquote != null then
-            recurse { acc = (acc ++ [
-                        { type = "backquote"; value = (head backquote); inherit line; }
-                      ]);
-                      rest = (elemAt backquote 1);
-                      line = line;
-                    }
-          else if expand != null then
-            recurse { acc = (acc ++ [
-                        { type = "expand"; value = (head expand); inherit line; }
-                      ]);
-                      rest = (elemAt expand 1);
-                      line = line;
-                    }
-          else if slice != null then
-            recurse { acc = (acc ++ [
-                        { type = "slice"; value = (head slice); inherit line; }
-                      ]);
-                      rest = (elemAt slice 1);
-                      line = line;
-                    }
+            else throw "Unrecognized token ${substring 1 1 rest} on line ${toString line}"
+          else if nextChar == "`" then
+            recurse {
+              acc = (acc ++ [{ type = "backquote"; value = "`"; inherit line; }]);
+              rest = substring 1 (len - 1) rest;
+              line = line;
+            }
+          else if nextChar == "," then
+            if substring 1 1 rest == "@" then
+              recurse {
+                acc = (acc ++ [{ type = "slice"; value = ",@"; inherit line; }]);
+                rest = substring 2 (len - 1) rest;
+                line = line;
+              }
+            else
+              recurse {
+                acc = (acc ++ [{ type = "expand"; value = ","; inherit line; }]);
+                rest = substring 1 (len - 1) rest;
+                line = line;
+              }
           else if symbol != null then
             recurse { acc = (acc ++ [
                         { type = "symbol"; value = (head symbol); inherit line; }
                       ]);
                       rest = (elemAt symbol 1);
-                      line = line;
+                      line = (line + countNewlines (head symbol)); # Yup, symbol names can contain newlines, if escaped...
                     }
           else if rest == "" then
             acc
