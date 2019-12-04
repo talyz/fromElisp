@@ -9,61 +9,51 @@ let
   # metadata.
   tokenizeElisp = elisp:
     let
-      # The matchers are all take one string as argument and, on
-      # successful match, return a list where the first item is the
-      # matched token and the last is the rest of the string (the
-      # non-matching part), otherwise they return null.
-      matchWhitespace = string: match "([[:space:]]+)(.*)" string;
-      matchComment = string: match "(;[^\n]*[\n])(.*)" string;
-      matchString = string:
-        let
-          matchedString = match ''("([^"\\]|\\.)*")(.*)'' string;
-          len = length matchedString;
-        in
-          if matchedString != null then [(head matchedString) (elemAt matchedString (len - 1))] else null;
-
       # These are the only characters that can not be unescaped in a
       # symbol name. We match the inverse of these to get the actual
       # symbol characters and use them to differentiate between
       # symbols and tokens that could potentially look like symbols,
-      # such as numbers.
+      # such as numbers. Due to the leading bracket, this has to be
+      # placed _first_ inside a bracket expression.
       notInSymbol = '']["'`,#;\\()[:space:][:cntrl:]'';
 
-      # For subexpressions containing subexpressions, what is matched
-      # by the outer subexpression is returned first, then what is
-      # matched by the inner ones. This means we have to take extra
-      # care when the "rest"-subexpression itself contains
-      # subexpressions: we're only interested in the outer match.
+      # The matchers all take one string as argument and, on
+      # successful match, returns the match as a string, otherwise
+      # they return null.
+      matchComment = string:
+        let matchedComment = match "(;[^\n]*[\n]).*" string;
+        in
+          if matchedComment != null then head matchedComment else null;
+
+      matchString = string:
+        let matchedString = match ''("([^"\\]|\\.)*").*'' string;
+        in
+          if matchedString != null then head matchedString else null;
+
       matchCharacter = string:
-        let
-          character = match ''([?]([^\\]|\\.))(([${notInSymbol}]|$).*)'' string;
-          len = length character;
+        let character = match ''([?]([^\\]|\\.))([${notInSymbol}]|$).*'' string;
         in
-          if character != null then [(head character) (elemAt character (len - 2))] else null;
+          if character != null then head character else null;
+
       matchNonBase10Integer = string:
-        let
-          integer = match ''(#([BOX]|[[:digit:]]{1,2}r)[[:digit:]a-fA-F]+)(([${notInSymbol}]|$).*)'' string;
-          len = length integer;
+        let integer = match ''(#([BOX]|[[:digit:]]{1,2}r)[[:digit:]a-fA-F]+)([${notInSymbol}]|$).*'' string;
         in
-          if integer != null then [(head integer) (elemAt integer (len - 2))] else null;
+          if integer != null then head integer else null;
+
       matchInteger = string:
-        let
-          integer = match ''([+-]?[[:digit:]]+[.]?)(([${notInSymbol}]|$).*)'' string;
-          len = length integer;
+        let integer = match ''([+-]?[[:digit:]]+[.]?)([${notInSymbol}]|$).*'' string;
         in
-          if integer != null then [(head integer) (elemAt integer (len - 2))] else null;
+          if integer != null then head integer else null;
+
       matchFloat = string:
-        let
-          float = match ''([+-]?([[:digit:]]*[.][[:digit:]]+|([[:digit:]]*[.])?[[:digit:]]+e([[:digit:]]+|[+](INF|NaN))))(([${notInSymbol}]|$).*)'' string;
-          len = length float;
+        let float = match ''([+-]?([[:digit:]]*[.][[:digit:]]+|([[:digit:]]*[.])?[[:digit:]]+e([[:digit:]]+|[+](INF|NaN))))([${notInSymbol}]|$).*'' string;
         in
-          if float != null then [(head float) (elemAt float (len - 2))] else null;
+          if float != null then head float else null;
+
       matchDot = string:
-        let
-          dot = match ''([.])(([${notInSymbol}]|$).*)'' string;
-          len = length dot;
+        let dot = match ''([.])([${notInSymbol}]|$).*'' string;
         in
-          if dot != null then [(head dot) (elemAt dot (len - 2))] else null;
+          if dot != null then head dot else null;
 
       # Symbols can contain pretty much any characters - the general
       # rule is that if nothing else matches, it's a symbol, so we
@@ -72,23 +62,41 @@ let
       matchSymbol = string:
         let
           symbolChar = ''([^${notInSymbol}]|\\.)'';
-          symbol = match ''(${symbolChar}+)(([${notInSymbol}]|$).*)'' string;
-          len = length symbol;
+          symbol = match ''(${symbolChar}+)([${notInSymbol}]|$).*'' string;
         in
-          if symbol != null then [(head symbol) (elemAt symbol (len - 2))] else null;
+          if symbol != null then head symbol else null;
 
-      # Check for matching tokens one by one; the first matching token
-      # type is added to the list and the function then calls itself
-      # recursively to check for the next token, until there's nothing
-      # left of the string or nothing matches. The order of the
-      # matches is significant - matchSymbol will, for example, also
-      # match numbers and characters, so we check for symbols last. We
-      # also keep track of what line the match was on by counting the
-      # number of newlines in the match, adding that many to the line
-      # argument when recursing.
-      recurse = { acc, line, rest }:
+      len = stringLength elisp;
+
+      # Fold over all the characters in a string, checking for
+      # matching tokens.
+      #
+      # The implementation is a bit obtuse, for optimization reasons:
+      # nix doesn't have tail-call optimization, thus a strict fold,
+      # which should essentially force a limited version of tco when
+      # iterating a list, is our best alternative.
+      #
+      # The string read from is split into a list of its constituent
+      # characters, which is then folded over. Each character is then
+      # used to determine a likely matching regex "matcher" to run on
+      # the string, starting at the position of the aforementioned
+      # character. When an appropriate matcher has been found and run
+      # successfully on the string, its result is added to
+      # `state.acc`, a list of all matched tokens. The length of the
+      # matched token is determined and passed on to the following
+      # iteration through `state.skip`. If `state.skip` is positive,
+      # nothing will be done in the current iteration, except
+      # decrementing `state.skip` for the next one: this skips the
+      # characters we've already matched. At each iteration,
+      # `state.pos` is also incremented, to keep track of the current
+      # string position.
+      #
+      # The order of the matches is significant - matchSymbol will,
+      # for example, also match numbers and characters, so we check
+      # for symbols last.
+      readToken = state: char:
         let
-          whitespace = matchWhitespace rest;
+          rest = substring state.pos (len - state.pos) elisp;
           comment = matchComment rest;
           character = matchCharacter rest;
           nonBase10Integer = matchNonBase10Integer rest;
@@ -98,144 +106,138 @@ let
           string = matchString rest;
           dot = matchDot rest;
           symbol = matchSymbol rest;
-          countNewlines = string: count (p: p == "\n") (stringToCharacters string);
-
-          nextChar = substring 0 1 rest;
-          len = stringLength rest;
         in
-          if nextChar == " " || nextChar == "\n" || nextChar == "\t" || nextChar == "\r" then
-            recurse {
-              acc = (acc ++ [{ type = "whitespace"; value = (head whitespace); inherit line; }]);
-              rest = (elemAt whitespace 1);
-              line = (line + countNewlines (head whitespace));
+          if state.skip > 0 then
+            state // {
+              pos = state.pos + 1;
+              skip = state.skip - 1;
+              line = if char == "\n" then state.line + 1 else state.line;
             }
-          else if nextChar == ";" then
-            recurse {
-              acc = (acc ++ [{ type = "comment"; value = (head comment); inherit line; }]);
-              rest = (elemAt comment 1);
-              line = (line + 1);
+          else if char == " " || char == "\n" || char == "\t" || char == "\r" then
+            state // {
+              pos = state.pos + 1;
+              line = if char == "\n" then state.line + 1 else state.line;
             }
-          else if nextChar == "(" then
-            recurse {
-              acc = acc ++ [{ type = "openParen"; value = "("; inherit line; }];
-              rest = substring 1 (len - 1) rest;
-              line = line;
-            }
-          else if nextChar == ")" then
-            recurse {
-              acc = (acc ++ [{ type = "closeParen"; value = ")"; inherit line; }]);
-              rest = substring 1 (len - 1) rest;
-              line = line;
-            }
-          else if nextChar == "[" then
-            recurse {
-              acc = (acc ++ [{ type = "openBracket"; value = "["; inherit line; }]);
-              rest = substring 1 (len - 1) rest;
-              line = line;
-            }
-          else if nextChar == "]" then
-            recurse {
-              acc = (acc ++ [{ type = "closeBracket"; value = "]"; inherit line; }]);
-              rest = substring 1 (len - 1) rest;
-              line = line;
-            }
-          else if nextChar == "'" then
-            recurse {
-              acc = (acc ++ [
-                { type = "quote"; value = "'"; inherit line; }
-              ]);
-              rest = substring 1 (len - 1) rest;
-              line = line;
-            }
-          else if nextChar == ''"'' then
-            recurse {
-              acc = (acc ++ [{ type = "string"; value = (head string); inherit line; }]);
-              rest = (elemAt string 1);
-              line = (line + countNewlines (head string));
-            }
-          else if nextChar == "#" then
-            if substring 1 1 rest == "'" then
-              recurse {
-                acc = (acc ++ [{ type = "function"; value = "#'"; inherit line; }]);
-                rest = substring 2 (len - 1) rest;
-                line = line;
+          else if char == ";" then
+            if comment != null then
+              state // {
+                acc = state.acc ++ [{ type = "comment"; value = comment; inherit (state) line; }];
+                pos = state.pos + 1;
+                skip = (stringLength comment) - 1;
               }
-            else if nonBase10Integer != null then
-              recurse {
-                acc = (acc ++ [{ type = "nonBase10Integer"; value = (head nonBase10Integer); inherit line; }]);
-                rest = (elemAt nonBase10Integer 1);
-                line = line;
+            else throw "Unrecognized token on line ${toString state.line}: ${rest}"
+          else if char == "(" then
+            state // {
+              acc = state.acc ++ [{ type = "openParen"; value = "("; inherit (state) line; }];
+              pos = state.pos + 1;
+            }
+          else if char == ")" then
+            state // {
+              acc = state.acc ++ [{ type = "closeParen"; value = ")"; inherit (state) line; }];
+              pos = state.pos + 1;
+            }
+          else if char == "[" then
+            state // {
+              acc = state.acc ++ [{ type = "openBracket"; value = "["; inherit (state) line; }];
+              pos = state.pos + 1;
+            }
+          else if char == "]" then
+            state // {
+              acc = state.acc ++ [{ type = "closeBracket"; value = "]"; inherit (state) line; }];
+              pos = state.pos + 1;
+            }
+          else if char == "'" then
+            state // {
+              acc = state.acc ++ [{ type = "quote"; value = "'"; inherit (state) line; }];
+              pos = state.pos + 1;
+            }
+          else if char == ''"'' then
+            if string != null then
+              state // {
+                acc = state.acc ++ [{ type = "string"; value = string; inherit (state) line; }];
+                pos = state.pos + 1;
+                skip = (stringLength string) - 1;
               }
-            else throw "Unrecognized token ${substring 1 1 rest} on line ${toString line}"
-          else if nextChar == "+" || nextChar == "-" || nextChar == "."
-                  || nextChar == "0" || nextChar == "1" || nextChar == "2" || nextChar == "3"
-                  || nextChar == "4" || nextChar == "5" || nextChar == "6" || nextChar == "7"
-                  || nextChar == "8" || nextChar == "9" then
+            else throw "Unrecognized token on line ${toString state.line}: ${rest}"
+          else if char == "#" then
+            let nextChar = substring 1 1 rest;
+            in
+              if nextChar == "'" then
+                state // {
+                  acc = state.acc ++ [{ type = "function"; value = "#'"; inherit (state) line; }];
+                  pos = state.pos + 1;
+                  skip = 1;
+                }
+              else if nonBase10Integer != null then
+                state // {
+                  acc = state.acc ++ [{ type = "nonBase10Integer"; value = nonBase10Integer; inherit (state) line; }];
+                  pos = state.pos + 1;
+                  skip = (stringLength nonBase10Integer) - 1;
+                }
+              else throw "Unrecognized token on line ${toString state.line}: ${rest}"
+          else if char == "+" || char == "-" || char == "."
+                  || char == "0" || char == "1" || char == "2" || char == "3"
+                  || char == "4" || char == "5" || char == "6" || char == "7"
+                  || char == "8" || char == "9" then
             if integer != null then
-              recurse {
-                acc = (acc ++ [{ type = "integer"; value = (head integer); inherit line; }]);
-                rest = (elemAt integer 1);
-                line = line;
+              state // {
+                acc = state.acc ++ [{ type = "integer"; value = integer; inherit (state) line; }];
+                pos = state.pos + 1;
+                skip = (stringLength integer) - 1;
               }
             else if float != null then
-              recurse {
-                acc = (acc ++ [{ type = "float"; value = (head float); inherit line; }]);
-                rest = (elemAt float 1);
-                line = line;
+              state // {
+                acc = state.acc ++ [{ type = "float"; value = float; inherit (state) line; }];
+                pos = state.pos + 1;
+                skip = (stringLength float) - 1;
               }
             else if dot != null then
-              recurse {
-                acc = (acc ++ [{ type = "dot"; value = (head dot); inherit line; }]);
-                rest = (elemAt dot 1);
-                line = line;
+              state // {
+                acc = state.acc ++ [{ type = "dot"; value = dot; inherit (state) line; }];
+                pos = state.pos + 1;
+                skip = (stringLength dot) - 1;
               }
             else if symbol != null then
-              recurse {
-                acc = (acc ++ [{ type = "symbol"; value = (head symbol); inherit line; }]);
-                rest = (elemAt symbol 1);
-                line = (line + countNewlines (head symbol)); # Yup, symbol names can contain newlines, if escaped...
+              state // {
+                acc = state.acc ++ [{ type = "symbol"; value = symbol; inherit (state) line; }];
+                pos = state.pos + 1;
+                skip = (stringLength symbol) - 1;
               }
-            else throw "Unrecognized token ${substring 1 1 rest} on line ${toString line}"
-          else if nextChar == "?" then
+            else throw "Unrecognized token on line ${toString state.line}: ${rest}"
+          else if char == "?" then
             if character != null then
-            recurse { acc = (acc ++ [
-                        { type = "character"; value = (head character); inherit line; }
-                      ]);
-                      rest = (elemAt character 1);
-                      line = (line + countNewlines (head character));
-                    }
-            else throw "Unrecognized token ${substring 1 1 rest} on line ${toString line}"
-          else if nextChar == "`" then
-            recurse {
-              acc = (acc ++ [{ type = "backquote"; value = "`"; inherit line; }]);
-              rest = substring 1 (len - 1) rest;
-              line = line;
+              state // {
+                acc = state.acc ++ [{ type = "character"; value = character; inherit (state) line; }];
+                pos = state.pos + 1;
+                skip = (stringLength character) - 1;
+              }
+            else throw "Unrecognized token on line ${toString state.line}: ${rest}"
+          else if char == "`" then
+            state // {
+              acc = state.acc ++ [{ type = "backquote"; value = "`"; inherit (state) line; }];
+              pos = state.pos + 1;
             }
-          else if nextChar == "," then
+          else if char == "," then
             if substring 1 1 rest == "@" then
-              recurse {
-                acc = (acc ++ [{ type = "slice"; value = ",@"; inherit line; }]);
-                rest = substring 2 (len - 1) rest;
-                line = line;
+              state // {
+                acc = state.acc ++ [{ type = "slice"; value = ",@"; inherit (state) line; }];
+                skip = 1;
+                pos = state.pos + 1;
               }
             else
-              recurse {
-                acc = (acc ++ [{ type = "expand"; value = ","; inherit line; }]);
-                rest = substring 1 (len - 1) rest;
-                line = line;
+              state // {
+                acc = state.acc ++ [{ type = "expand"; value = ","; inherit (state) line; }];
+                pos = state.pos + 1;
               }
           else if symbol != null then
-            recurse { acc = (acc ++ [
-                        { type = "symbol"; value = (head symbol); inherit line; }
-                      ]);
-                      rest = (elemAt symbol 1);
-                      line = (line + countNewlines (head symbol)); # Yup, symbol names can contain newlines, if escaped...
-                    }
-          else if rest == "" then
-            acc
+            state // {
+              acc = state.acc ++ [{ type = "symbol"; value = symbol; inherit (state) line; }];
+              pos = state.pos + 1;
+              skip = (stringLength symbol) - 1;
+            }
           else
-            throw "Unrecognized syntax on line ${toString line}: ${rest}";
-    in recurse { acc = []; rest = (readFile elisp); line = 1; };
+            throw "Unrecognized token on line ${toString state.line}: ${rest}";
+    in (builtins.foldl' readToken { acc = []; pos = 0; skip = 0; line = 1; } (stringToCharacters elisp)).acc;
 
   # Produce an AST from a string of elisp.
   parseElisp = elisp:
