@@ -31,7 +31,7 @@ let
           if matchedString != null then head matchedString else null;
 
       matchCharacter = string:
-        let character = match ''([?]([^\\]|\\.))([${notInSymbol}]|$).*'' string;
+        let character = match ''([?]((\\[sSHMAC]-)|\\\^)*(([^][\\()]|\\[][\\()])|\\[^^SHMACNuUx0-7]|\\[uU][[:digit:]a-fA-F]+|\\x[[:digit:]a-fA-F]*|\\[0-7]{1,3}|\\N\{[^}]+}))([${notInSymbol}?]|$).*'' string;
         in
           if character != null then head character else null;
 
