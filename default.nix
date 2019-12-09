@@ -45,6 +45,11 @@ let
         in
           if integer != null then head integer else null;
 
+      matchBoolVector = string:
+        let matchedBoolVector = match ''(#&[[:digit:]]+"([^"\\]|\\.)*").*'' string;
+        in
+          if matchedBoolVector != null then head matchedBoolVector else null;
+
       matchFloat = string:
         let float = match ''([+-]?([[:digit:]]*[.][[:digit:]]+|([[:digit:]]*[.])?[[:digit:]]+e([[:digit:]]+|[+](INF|NaN))))([${notInSymbol}]|$).*'' string;
         in
@@ -103,6 +108,7 @@ let
           integer = matchInteger rest;
           float = matchFloat rest;
           function = matchFunction rest;
+          boolVector = matchBoolVector rest;
           string = matchString rest;
           dot = matchDot rest;
           symbol = matchSymbol rest;
@@ -168,6 +174,14 @@ let
                   pos = state.pos + 1;
                   skip = 1;
                 }
+              else if nextChar == "&" then
+                if boolVector != null then
+                  state // {
+                    acc = state.acc ++ [{ type = "boolVector"; value = boolVector; inherit (state) line; }];
+                    pos = state.pos + 1;
+                    skip = (stringLength boolVector) - 1;
+                  }
+                else throw "Unrecognized token on line ${toString state.line}: ${rest}"
               else if nonBase10Integer != null then
                 state // {
                   acc = state.acc ++ [{ type = "nonBase10Integer"; value = nonBase10Integer; inherit (state) line; }];
