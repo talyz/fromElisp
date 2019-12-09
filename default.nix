@@ -190,6 +190,11 @@ let
                     skip = 1;
                   }
                 else throw "List must follow #s in record on line ${toString state.line}: ${rest}"
+              else if nextChar == "[" then
+                state // {
+                  acc = state.acc ++ [{ type = "byteCode"; value = "#"; inherit (state) line; }];
+                  pos = state.pos + 1;
+                }
               else if nonBase10Integer != null then
                 state // {
                   acc = state.acc ++ [{ type = "nonBase10Integer"; value = nonBase10Integer; inherit (state) line; }];
@@ -386,7 +391,7 @@ let
             if token.type == "quote" || token.type == "expand"
                || token.type == "slice" || token.type == "backquote"
                || token.type == "function" || token.type == "record"
-               then
+               || token.type == "byteCode" then
                  if rest == [] then
                    throw "No value to quote on line ${toString token.line}"
                  else
@@ -429,6 +434,8 @@ let
           [",@" (readObject object.value)]
         else if object.type == "function" then
           ["#'" (readObject object.value)]
+        else if object.type == "byteCode" then
+          ["#"] ++ (readObject object.value)
         else if object.type == "record" then
           ["#s"] ++ (readObject object.value)
         else
