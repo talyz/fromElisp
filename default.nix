@@ -182,6 +182,14 @@ let
                     skip = (stringLength boolVector) - 1;
                   }
                 else throw "Unrecognized token on line ${toString state.line}: ${rest}"
+              else if nextChar == "s" then
+                if substring 2 1 rest == "(" then
+                  state // {
+                    acc = state.acc ++ [{ type = "record"; value = "#s"; inherit (state) line; }];
+                    pos = state.pos + 1;
+                    skip = 1;
+                  }
+                else throw "List must follow #s in record on line ${toString state.line}: ${rest}"
               else if nonBase10Integer != null then
                 state // {
                   acc = state.acc ++ [{ type = "nonBase10Integer"; value = nonBase10Integer; inherit (state) line; }];
@@ -377,7 +385,8 @@ let
           in
             if token.type == "quote" || token.type == "expand"
                || token.type == "slice" || token.type == "backquote"
-               || token.type == "function" then
+               || token.type == "function" || token.type == "record"
+               then
                  if rest == [] then
                    throw "No value to quote on line ${toString token.line}"
                  else
@@ -420,6 +429,8 @@ let
           [",@" (readObject object.value)]
         else if object.type == "function" then
           ["#'" (readObject object.value)]
+        else if object.type == "record" then
+          ["#s"] ++ (readObject object.value)
         else
           object.value;
     in
