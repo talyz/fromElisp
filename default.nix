@@ -1,9 +1,29 @@
-{ pkgs ? import <nixpkgs> {} }:
+{ pkgs ? import <nixpkgs> {},
+  commentMaxLength ? 300,
+  stringMaxLength ? 3000,
+  characterMaxLength ? 50,
+  integerMaxLength ? 50,
+  floatMaxLength ? 50,
+  boolVectorMaxLength ? 50,
+  symbolMaxLength ? 50
+}:
 
 with pkgs.lib;
 with builtins;
 
 let
+
+  # Create a matcher from a regex string and maximum length. A
+  # matcher takes a string and returns the first match produced by
+  # running its regex on it, or null if the match is unsuccessful,
+  # but only as far in as specified by maxLength.
+  mkMatcher = regex: maxLength:
+    string:
+      let
+        substr = substring 0 maxLength string;
+        matched = match regex substr;
+      in
+        if matched != null then head matched else null;
 
   removeStrings = stringsToRemove: string:
     let
@@ -24,61 +44,40 @@ let
       # placed _first_ inside a bracket expression.
       notInSymbol = '']["'`,#;\\()[:space:][:cntrl:]'';
 
-      # The matchers all take one string as argument and, on
-      # successful match, returns the match as a string, otherwise
-      # they return null.
-      matchComment = string:
-        let matchedComment = match "(;[^\n]*[\n]).*" string;
-        in
-          if matchedComment != null then head matchedComment else null;
+      matchComment = mkMatcher "(;[^\n]*[\n]).*" commentMaxLength;
 
-      matchString = string:
-        let matchedString = match ''("([^"\\]|\\.)*").*'' string;
-        in
-          if matchedString != null then head matchedString else null;
+      matchString = mkMatcher ''("([^"\\]|\\.)*").*'' stringMaxLength;
 
-      matchCharacter = string:
-        let character = match ''([?]((\\[sSHMAC]-)|\\\^)*(([^][\\()]|\\[][\\()])|\\[^^SHMACNuUx0-7]|\\[uU][[:digit:]a-fA-F]+|\\x[[:digit:]a-fA-F]*|\\[0-7]{1,3}|\\N\{[^}]+}))([${notInSymbol}?]|$).*'' string;
-        in
-          if character != null then head character else null;
+      matchCharacter = mkMatcher ''([?]((\\[sSHMAC]-)|\\\^)*(([^][\\()]|\\[][\\()])|\\[^^SHMACNuUx0-7]|\\[uU][[:digit:]a-fA-F]+|\\x[[:digit:]a-fA-F]*|\\[0-7]{1,3}|\\N\{[^}]+}))([${notInSymbol}?]|$).*'' characterMaxLength;
 
-      matchNonBase10Integer = string:
-        let integer = match ''(#([BOX]|[[:digit:]]{1,2}r)[[:digit:]a-fA-F]+)([${notInSymbol}]|$).*'' string;
-        in
-          if integer != null then head integer else null;
+      matchNonBase10Integer = mkMatcher ''(#([BOX]|[[:digit:]]{1,2}r)[[:digit:]a-fA-F]+)([${notInSymbol}]|$).*'' integerMaxLength;
 
-      matchInteger = string:
-        let integer = match ''([+-]?[[:digit:]]+[.]?)([${notInSymbol}]|$).*'' string;
-        in
-          if integer != null then head integer else null;
+      matchInteger = mkMatcher ''([+-]?[[:digit:]]+[.]?)([${notInSymbol}]|$).*'' integerMaxLength;
 
-      matchBoolVector = string:
-        let matchedBoolVector = match ''(#&[[:digit:]]+"([^"\\]|\\.)*").*'' string;
-        in
-          if matchedBoolVector != null then head matchedBoolVector else null;
+      matchBoolVector = mkMatcher ''(#&[[:digit:]]+"([^"\\]|\\.)*").*'' boolVectorMaxLength;
 
-      matchFloat = string:
-        let float = match ''([+-]?([[:digit:]]*[.][[:digit:]]+|([[:digit:]]*[.])?[[:digit:]]+e([[:digit:]]+|[+](INF|NaN))))([${notInSymbol}]|$).*'' string;
-        in
-          if float != null then head float else null;
+      matchFloat = mkMatcher ''([+-]?([[:digit:]]*[.][[:digit:]]+|([[:digit:]]*[.])?[[:digit:]]+e([[:digit:]]+|[+](INF|NaN))))([${notInSymbol}]|$).*'' floatMaxLength;
 
-      matchDot = string:
-        let dot = match ''([.])([${notInSymbol}]|$).*'' string;
-        in
-          if dot != null then head dot else null;
+      matchDot = mkMatcher ''([.])([${notInSymbol}]|$).*'' 2;
 
       # Symbols can contain pretty much any characters - the general
       # rule is that if nothing else matches, it's a symbol, so we
       # should be pretty generous here and match for symbols last. See
       # https://www.gnu.org/software/emacs/manual/html_node/elisp/Symbol-Type.html
-      matchSymbol = string:
+      matchSymbol =
         let
           symbolChar = ''([^${notInSymbol}]|\\.)'';
-          symbol = match ''(${symbolChar}+)([${notInSymbol}]|$).*'' string;
-        in
-          if symbol != null then head symbol else null;
+        in mkMatcher ''(${symbolChar}+)([${notInSymbol}]|$).*'' symbolMaxLength;
 
-      len = stringLength elisp;
+      maxTokenLength = foldl' max 0 [
+        commentMaxLength
+        stringMaxLength
+        characterMaxLength
+        integerMaxLength
+        floatMaxLength
+        boolVectorMaxLength
+        symbolMaxLength
+      ];
 
       # Fold over all the characters in a string, checking for
       # matching tokens.
@@ -108,7 +107,7 @@ let
       # for symbols last.
       readToken = state: char:
         let
-          rest = substring state.pos (len - state.pos) elisp;
+          rest = substring state.pos maxTokenLength elisp;
           comment = matchComment rest;
           character = matchCharacter rest;
           nonBase10Integer = matchNonBase10Integer rest;
