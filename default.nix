@@ -5,6 +5,13 @@ with builtins;
 
 let
 
+  removeStrings = stringsToRemove: string:
+    let
+      len = length stringsToRemove;
+      listOfNullStrings = genList (const "") len;
+    in
+      replaceStrings stringsToRemove listOfNullStrings string;
+
   # Split a string of elisp into individual tokens and add useful
   # metadata.
   tokenizeElisp = elisp:
@@ -274,24 +281,37 @@ let
       removeWhitespace = tokens:
         filter (token: (token.type != "whitespace") && (token.type != "comment")) tokens;
 
-      # Convert all literal value tokens in a flat list to their
-      # corresponding nix representation. Character tokens are only
-      # converted to single character strings, not their corresponding
-      # character codes.
+      # Convert literal value tokens in a flat list to their
+      # corresponding nix representation.
       parseValues = tokens:
         map (token:
-          if token.type == "character" then
-            token // {
-              value = substring 1 (stringLength token.value - 1) token.value;
-            }
-          else if token.type == "string" then
+          if token.type == "string" then
             token // {
               value = substring 1 (stringLength token.value - 2) token.value;
             }
-          # else if token.type == "integer" then
-          #   token // {
-          #     value = fromJSON (head (match "[+]?(.*)" token.value));
-          #   }
+          else if token.type == "integer" then
+            token // {
+              value = fromJSON (removeStrings ["+"] token.value);
+            }
+          else if token.type == "symbol" && token.value == "t" then
+            token // {
+              value = true;
+            }
+          else if token.type == "symbol" && token.value == "nil" then
+            token // {
+              type = "list";
+              value = [];
+            }
+          else if token.type == "float" then
+            let
+              float = match "([+-]?([[:digit:]]*[.])?[[:digit:]]+(e[+-]?[[:digit:]]+)?)" token.value;
+            in
+              if float != null then
+                token // {
+                  value = fromJSON (removeStrings ["+"] (head float));
+                }
+              else
+                token
           else
             token
         ) tokens;
