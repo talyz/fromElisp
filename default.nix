@@ -134,7 +134,6 @@ let
           else if char == ";" then
             if comment != null then
               state // {
-                acc = state.acc ++ [{ type = "comment"; value = comment; inherit (state) line; }];
                 pos = state.pos + 1;
                 skip = (stringLength comment) - 1;
               }
@@ -276,11 +275,6 @@ let
   # Produce an AST from a string of elisp.
   parseElisp = elisp:
     let
-      # Remove all whitespace tokens from a flat list, e.g. the output
-      # from tokenizeElisp.
-      removeWhitespace = tokens:
-        filter (token: (token.type != "whitespace") && (token.type != "comment")) tokens;
-
       # Convert literal value tokens in a flat list to their
       # corresponding nix representation.
       parseValues = tokens:
@@ -433,10 +427,7 @@ let
             else
               [ token ] ++ parseQuotes rest;
     in
-      # Parsing is done in three stages: first we remove whitespace and
-      # parse literals, then we parse lists and vectors. Lastly, we parse
-      # quotes.
-      parseQuotes (parseCollections (parseValues (removeWhitespace (tokenizeElisp elisp))));
+      parseQuotes (parseCollections (parseValues (tokenizeElisp elisp)));
 
   fromElisp = elisp:
     let
