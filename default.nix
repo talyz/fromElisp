@@ -125,7 +125,7 @@ let
               skip = state.skip - 1;
               line = if char == "\n" then state.line + 1 else state.line;
             }
-          else if char == " " || char == "\n" || char == "\t" || char == "\r" then
+          else if elem char [ " " "\n" "\t" "\r" ] then
             state // {
               pos = state.pos + 1;
               line = if char == "\n" then state.line + 1 else state.line;
@@ -207,10 +207,7 @@ let
                   skip = (stringLength nonBase10Integer) - 1;
                 }
               else throw "Unrecognized token on line ${toString state.line}: ${rest}"
-          else if char == "+" || char == "-" || char == "."
-                  || char == "0" || char == "1" || char == "2" || char == "3"
-                  || char == "4" || char == "5" || char == "6" || char == "7"
-                  || char == "8" || char == "9" then
+          else if elem char [ "+" "-" "." "0" "1" "2" "3" "4" "5" "6" "7" "8" "9" ] then
             if integer != null then
               state // {
                 acc = state.acc ++ [{ type = "integer"; value = integer; inherit (state) line; }];
@@ -401,24 +398,21 @@ let
             token = head tokens;
             rest = tail tokens;
           in
-            if token.type == "quote" || token.type == "expand"
-               || token.type == "slice" || token.type == "backquote"
-               || token.type == "function" || token.type == "record"
-               || token.type == "byteCode" then
-                 if rest == [] then
-                   throw "No value to quote on line ${toString token.line}"
-                 else
-                   let
-                     quotedValue = head rest;
-                   in
-                     [
-                       (token // {
-                         value = if isList quotedValue.value then
-                                   quotedValue // { value = parseQuotes quotedValue.value; }
-                                 else
-                                   quotedValue;
-                       })
-                     ] ++ parseQuotes (tail rest)
+            if elem token.type [ "quote" "expand" "slice" "backquote" "function" "record" "byteCode" ] then
+              if rest == [] then
+                throw "No value to quote on line ${toString token.line}"
+              else
+                let
+                  quotedValue = head rest;
+                in
+                  [
+                    (token // {
+                      value = if isList quotedValue.value then
+                                quotedValue // { value = parseQuotes quotedValue.value; }
+                              else
+                                quotedValue;
+                    })
+                  ] ++ parseQuotes (tail rest)
             else if isList token.value then
               [
                 (token // { value = parseQuotes token.value; })
