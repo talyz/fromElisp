@@ -287,11 +287,6 @@ let
             token // {
               value = true;
             }
-          else if token.type == "symbol" && token.value == "nil" then
-            token // {
-              type = "list";
-              value = [];
-            }
           else if token.type == "float" then
             let
               float = match "([+-]?([[:digit:]]*[.])?[[:digit:]]+(e[+-]?[[:digit:]]+)?)" token.value;
@@ -307,90 +302,128 @@ let
         ) tokens;
 
       # Convert pairs of opening and closing tokens to their
-      # respective collection types, i.e. lists and vectors.
+      # respective collection types, i.e. lists and vectors. Also,
+      # normalize the forms of nil, which can be written as either
+      # `nil` or `()`, to empty lists.
+      #
+      # For performance reasons, this is implemented as a fold over
+      # the list of tokens, rather than as a recursive function. To
+      # keep track of list depth when sublists are parsed, a list,
+      # `state.acc`, is used as a stack. When entering a sublist, an
+      # empty list is pushed to `state.acc`, and items in the sublist
+      # are subsequently added to this list. When exiting the list,
+      # `state.acc` is popped and the completed list is added to the
+      # new head of `state.acc`, i.e. the outer list, which we were
+      # parsing before entering the sublist.
+      #
+      # Evaluation of old state is forced with `seq` in a few places,
+      # because nix otherwise keeps it around, eventually resulting in
+      # a stack overflow.
       parseCollections = tokens:
         let
-          recurse = { acc, tokens, type, depth, line }:
-            if tokens == [] then
-              if type == "list" && depth != 0 then
-                throw "Unmatched opening parenthesis on line ${toString line}"
-              else if type == "vector" && depth != 0 then
-                throw "Unmatched opening square bracket on line ${toString line}"
-              else
-                acc
-            else
-              let
-                token = head tokens;
-                rest = tail tokens;
-              in
-                if token.type == "openParen" then
+          parseToken = state: token:
+            let
+              openColl = if token.type == "openParen" then "list" else if token.type == "openBracket" then "vector" else null;
+              closeColl = if token.type == "closeParen" then "list" else if token.type == "closeBracket" then "vector" else null;
+            in
+              if openColl != null then
+                state // {
+                  acc = [ [] ] ++ seq (head state.acc) state.acc;
+                  inColl = [ openColl ] ++ state.inColl;
+                  depth = state.depth + 1;
+                  line = [ token.line ] ++ state.line;
+                }
+              else if closeColl != null then
+                if (head state.inColl) == closeColl then
                   let
-                    list' = recurse {
-                      acc = [];
-                      tokens = rest;
-                      type = "list";
-                      depth = (depth + 1);
-                      line = token.line;
+                    outerColl = elemAt state.acc 1;
+                    currColl = {
+                      type = closeColl;
+                      value = head state.acc;
+                      line = head state.line;
+                      inherit (state) depth;
                     };
-                    list = tail list';
+                    rest = tail (tail state.acc);
                   in
-                    recurse {
-                      acc = acc ++ [{ type = "list"; value = list; inherit depth; }];
-                      tokens = head list';
-                      inherit type depth line;
+                    state // seq state.acc {
+                      acc = [ (outerColl ++ [ currColl ]) ] ++ rest;
+                      inColl = tail state.inColl;
+                      depth = state.depth - 1;
+                      line = tail state.line;
                     }
-                else if token.type == "closeParen" then
-                  if depth == 0 || type != "list" then
-                    throw "Unmatched closing parenthesis on line ${toString token.line}"
-                  else
-                    [ rest ] ++ acc
-                else if token.type == "openBracket" then
-                  let
-                    vector' = recurse {
-                      acc = [];
-                      tokens = rest;
-                      type = "vector";
-                      depth = (depth + 1);
-                      line = token.line;
-                    };
-                    vector = tail vector';
-                  in
-                    recurse {
-                      acc = acc ++ [{ type = "vector"; value = vector; inherit depth; }];
-                      tokens = head vector';
-                      inherit type depth line;
-                    }
-                else if token.type == "closeBracket" then
-                  if depth == 0 || type != "vector" then
-                    throw "Unmatched closing bracket on line ${toString token.line}"
-                  else
-                    [ rest ] ++ acc
-                else if token.type == "dot" then
-                  if type == "list" then
-                    if (head rest).type == "openParen" then
-                      let
-                        list' = recurse {
-                          acc = [];
-                          tokens = tail rest;
-                          depth = depth + 1;
-                          line = (head rest).line;
-                          inherit type;
-                        };
-                        list = tail list';
-                      in
-                        recurse {
-                          acc = acc ++ list;
-                          tokens = head list';
-                          inherit type depth line;
-                        }
-                    else
-                      recurse { tokens = rest; inherit acc type depth line; }
-                  else
-                    throw ''"Dotted notation"-dot outside list on line ${toString token.line}''
                 else
-                  recurse { acc = acc ++ [ token ]; tokens = rest; inherit type depth line; };
+                  throw "Unmatched ${token.type} on line ${toString token.line}"
+              else if token.type == "symbol" && token.value == "nil" then
+                let
+                  currColl = head state.acc;
+                  rest = tail state.acc;
+                  emptyList = {
+                    type = "list";
+                    depth = state.depth + 1;
+                    value = [];
+                  };
+                in
+                  state // seq currColl { acc = [ (currColl ++ [ emptyList ]) ] ++ rest; }
+              else
+                let
+                  currColl = head state.acc;
+                  rest = tail state.acc;
+                in
+                  state // seq currColl { acc = [ (currColl ++ [ token ]) ] ++ rest; };
         in
-          recurse { acc = []; inherit tokens; type = null; depth = 0; line = 1; };
+          head (builtins.foldl' parseToken { acc = [ [] ]; inColl = [ null ]; depth = -1; line = []; } tokens).acc;
+
+      # Handle dotted pair notation, a syntax where the car and cdr
+      # are represented explicitly. See
+      # https://www.gnu.org/software/emacs/manual/html_node/elisp/Dotted-Pair-Notation.html#Dotted-Pair-Notation
+      # for more info.
+      #
+      # This mainly entails handling lists that are the cdrs of a
+      # dotted pairs, concatenating the lexically distinct lists into
+      # the logical list they actually represent.
+      #
+      # For example:
+      # (a . (b . (c . nil))) -> (a b c)
+      parseDots = tokens:
+        let
+          parseToken = state: token:
+            if token.type == "dot" then
+              if state.inList then
+                state // {
+                  dotted = true;
+                  depthReduction = state.depthReduction + 1;
+                }
+              else
+                throw ''"Dotted pair notation"-dot outside list on line ${toString token.line}''
+            else if isList token.value then
+              let
+                collectionContents = foldl' parseToken {
+                  acc = [];
+                  dotted = false;
+                  inList = token.type == "list";
+                  inherit (state) depthReduction;
+                } token.value;
+              in
+                state // {
+                  acc = state.acc ++ (
+                    if state.dotted then
+                      collectionContents.acc
+                    else
+                      [
+                        (token // {
+                          value = collectionContents.acc;
+                          depth = token.depth - state.depthReduction;
+                        })
+                      ]
+                  );
+                  dotted = false;
+                }
+            else
+              state // {
+                acc = state.acc ++ [token];
+              };
+        in
+          (foldl' parseToken { acc = []; dotted = false; inList = false; depthReduction = 0; } tokens).acc;
 
       parseQuotes = tokens:
         if tokens == [] then [] else
@@ -420,7 +453,7 @@ let
             else
               [ token ] ++ parseQuotes rest;
     in
-      parseQuotes (parseCollections (parseValues (tokenizeElisp elisp)));
+      parseQuotes (parseDots (parseCollections (parseValues (tokenizeElisp elisp))));
 
   fromElisp = elisp:
     let
