@@ -125,10 +125,29 @@ let
               skip = state.skip - 1;
               line = if char == "\n" then state.line + 1 else state.line;
             }
-          else if elem char [ " " "\n" "\t" "\r" ] then
+          else if char == "\n" then
+            let
+              mod = state.line / 1000;
+              newState = {
+                pos = state.pos + 1;
+                line = state.line + 1;
+                inherit mod;
+              };
+            in
+              state // (
+                # Force evaluation of old state every 1000 lines. Nix
+                # doesn't have a modulo builtin, so we have to save
+                # the result of an integer division and compare
+                # between runs.
+                if mod > state.mod then
+                  trace state.line (seq state.acc newState)
+                else
+                  newState
+              )
+          else if elem char [ " " "\t" "\r" ] then
             state // {
               pos = state.pos + 1;
-              line = if char == "\n" then state.line + 1 else state.line;
+              inherit (state) line;
             }
           else if char == ";" then
             if comment != null then
@@ -266,7 +285,7 @@ let
             }
           else
             throw "Unrecognized token on line ${toString state.line}: ${rest}";
-    in (builtins.foldl' readToken { acc = []; pos = 0; skip = 0; line = 1; } (stringToCharacters elisp)).acc;
+    in (builtins.foldl' readToken { acc = []; pos = 0; skip = 0; line = 1; mod = 0; } (stringToCharacters elisp)).acc;
 
   # Produce an AST from a string of elisp.
   parseElisp = elisp:
