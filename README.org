@@ -1,0 +1,109 @@
+#+TITLE: fromElisp
+
+An Emacs Lisp reader in Nix. Yes, it's /necessary/.
+
+#+begin_example
+  nix-repl> :p fromElisp "(use-package lsp-mode :ensure :commands lsp)"
+  [ [ "use-package" "lsp-mode" ":ensure" ":commands" "lsp" ] ]
+#+end_example
+
+* Functionality
+
+  ~fromElisp~ provides two main functions: ~fromElisp~ and ~parseElisp~.
+
+*** ~fromElisp~
+
+    Tries to convert the read Elisp to the closest equivalent data type in Nix.
+
+    For example,
+    #+begin_src emacs-lisp :tangle yes
+      (use-package highlight-symbol
+        :ensure t
+        :hook (((python-mode emacs-lisp-mode nix-mode) . highlight-symbol-mode)
+               ((python-mode emacs-lisp-mode nix-mode) . highlight-symbol-nav-mode))
+        :config
+        (highlight-symbol-nav-mode)
+        (setq highlight-symbol-idle-delay 0.5)
+        (set-face-attribute 'highlight-symbol-face nil :background "dark cyan"))
+    #+end_src
+    is read as
+    #+begin_src nix :tangle yes
+      [[ "use-package" "highlight-symbol"
+         ":ensure" true
+         ":hook" [[[ "python-mode" "emacs-lisp-mode" "nix-mode" ] "highlight-symbol-mode" ]
+                  [[ "python-mode" "emacs-lisp-mode" "nix-mode" ] "highlight-symbol-nav-mode" ]]
+         ":config"
+         [ "highlight-symbol-nav-mode" ]
+         [ "setq" "highlight-symbol-idle-delay" 0.5 ]
+         [ "set-face-attribute" [ "quote" "highlight-symbol-face" ] [ ] ":background" "dark cyan" ]]]
+    #+end_src
+
+*** ~parseElisp~
+
+    Provides an AST with additional structural info, such as object
+    type, line number and list depth.
+
+    The AST provided for the code
+    #+begin_src emacs-lisp :tangle yes
+      (setq mouse-wheel-scroll-amount '(3 ((shift) . 1)))
+    #+end_src
+    would be
+    #+begin_src nix :tangle yes
+      [{ depth = 0; line = 1; type = "list"; value = [
+           { line = 1; type = "symbol"; value = "setq"; }
+           { line = 1; type = "symbol"; value = "mouse-wheel-scroll-amount"; }
+           { line = 1; type = "quote"; value = {
+               depth = 1; line = 1; type = "list"; value = [
+                 { line = 1; type = "integer"; value = 3; }
+                 { depth = 2; line = 1; type = "list"; value = [
+                     { depth = 3; line = 1; type = "list"; value = [
+                         { line = 1; type = "symbol"; value = "shift"; }
+                       ];
+                     }
+                     { line = 1; type = "integer"; value = 1; }
+                   ];
+                 }
+               ];
+             };
+           }
+         ];
+       }]
+    #+end_src
+
+* Usage
+
+  You can use ~fromElisp~ in your code in multiple ways.
+
+*** fetchGit
+
+    You can use ~fetchGit~ without a ~rev~ attribute to try it out quickly
+    and then add the ~rev~ when you want reproducibility.
+
+    #+begin_src nix :tangle yes
+      with (import (builtins.fetchGit {
+        url = "https://github.com/talyz/fromElisp.git";
+        ref = "master";
+        # rev = "c13d6035666f36ca940db996f1dbaf83cb4e8453";
+      }));
+      # ... code ...
+    #+end_src
+
+*** niv
+
+    If you use [[https://github.com/nmattia/niv][niv]] to manage your Nix dependencies, simply run
+
+    #+begin_src shell :tangle yes
+      $ niv add talyz/fromElisp
+    #+end_src
+
+    to add ~fromElisp~ to your dependencies and import it as follows:
+
+    #+begin_src nix :tangle yes
+      with (import (import ./nix/sources.nix).fromElisp {});
+      # ... code ...
+    #+end_src
+
+*** Git submodule
+
+    If you plan on contributing to ~fromElisp~ and want to do it from
+    your own source, you can import it as a [[https://git-scm.com/book/en/v2/Git-Tools-Submodules][Git submodule]].
