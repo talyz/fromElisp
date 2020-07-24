@@ -140,7 +140,7 @@ let
                 # the result of an integer division and compare
                 # between runs.
                 if mod > state.mod then
-                  trace state.line (seq state.acc newState)
+                  seq state.acc newState
                 else
                   newState
               )
