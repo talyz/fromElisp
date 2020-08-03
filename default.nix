@@ -1,11 +1,11 @@
-{ pkgs ? import <nixpkgs> {},
-  commentMaxLength ? 300,
-  stringMaxLength ? 3000,
-  characterMaxLength ? 50,
-  integerMaxLength ? 50,
-  floatMaxLength ? 50,
-  boolVectorMaxLength ? 50,
-  symbolMaxLength ? 50
+{ pkgs ? import <nixpkgs> {}
+, commentMaxLength ? 300
+, stringMaxLength ? 3000
+, characterMaxLength ? 50
+, integerMaxLength ? 50
+, floatMaxLength ? 50
+, boolVectorMaxLength ? 50
+, symbolMaxLength ? 50
 }:
 
 with pkgs.lib;
