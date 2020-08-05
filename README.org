@@ -11,9 +11,10 @@ An Emacs Lisp reader in Nix. Yes, it's /necessary/.
 
   ~fromElisp~ provides two main functions: ~fromElisp~ and ~parseElisp~.
 
-*** ~fromElisp~
+  - *fromElisp* /elisp/ (string)
 
-    Tries to convert the read Elisp to the closest equivalent data type in Nix.
+    Takes a string argument and tries to convert the Elisp read from
+    it to the closest equivalent data type in Nix.
 
     For example,
     #+begin_src emacs-lisp :tangle yes
@@ -38,10 +39,10 @@ An Emacs Lisp reader in Nix. Yes, it's /necessary/.
          [ "set-face-attribute" [ "quote" "highlight-symbol-face" ] [ ] ":background" "dark cyan" ]]]
     #+end_src
 
-*** ~parseElisp~
+  - *parseElisp* /elisp/ (string)
 
-    Provides an AST with additional structural info, such as object
-    type, line number and list depth.
+    Takes a string argument and provides an AST with additional
+    structural info, such as object type, line number and list depth.
 
     The AST provided for the code
     #+begin_src emacs-lisp :tangle yes
@@ -69,6 +70,40 @@ An Emacs Lisp reader in Nix. Yes, it's /necessary/.
          ];
        }]
     #+end_src
+
+*** Other functions
+
+    - *tokenizeElisp* /elisp/ (string)
+
+      Takes a string argument and produces a list of tokens from the
+      Elisp read from it. Used internally by ~fromElisp~ and ~parseElisp~.
+
+    - *tokenizeElisp'* /args/ (attrs)
+
+      An alternate version of ~tokenizeElisp~ allowing the specification
+      of the starting line number.
+
+      /args/ is an attribute set with the following attributes:
+
+      - /elisp/ (string, required)
+
+        The string of Elisp to tokenize.
+
+      - /startLineNumber/ (int, optional)
+
+        The line number to use for the first line of /elisp/. Useful if
+        /elisp/ is a block of code from a larger file and you want line
+        numbers to be correct.
+
+    - *parseElisp'* /tokens/ (list)
+
+      An alternate version of ~parseElisp~ which takes as its argument a
+      list of tokens produced by ~tokenizeElisp~.
+
+    - *fromElisp'* /ast/ (list)
+
+      An alternate version of ~fromElisp~ which takes as its argument an
+      AST produced by ~parseElisp~.
 
 * Usage
 

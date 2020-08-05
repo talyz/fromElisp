@@ -34,7 +34,7 @@ let
 
   # Split a string of elisp into individual tokens and add useful
   # metadata.
-  tokenizeElisp = elisp:
+  tokenizeElisp' = { elisp, startLineNumber ? 1 }:
     let
       # These are the only characters that can not be unescaped in a
       # symbol name. We match the inverse of these to get the actual
@@ -285,10 +285,13 @@ let
             }
           else
             throw "Unrecognized token on line ${toString state.line}: ${rest}";
-    in (builtins.foldl' readToken { acc = []; pos = 0; skip = 0; line = 1; mod = 0; } (stringToCharacters elisp)).acc;
+    in (builtins.foldl' readToken { acc = []; pos = 0; skip = 0; line = startLineNumber; mod = 0; } (stringToCharacters elisp)).acc;
 
-  # Produce an AST from a string of elisp.
-  parseElisp = elisp:
+  tokenizeElisp = elisp:
+    tokenizeElisp' { inherit elisp; };
+
+  # Produce an AST from a list of tokens produced by `tokenizeElisp`.
+  parseElisp' = tokens:
     let
       # Convert literal value tokens in a flat list to their
       # corresponding nix representation.
@@ -479,11 +482,13 @@ let
         in
           (foldl' parseToken { acc = []; quotes = []; } tokens).acc;
     in
-      parseQuotes (parseDots (parseCollections (parseValues (tokenizeElisp elisp))));
+      parseQuotes (parseDots (parseCollections (parseValues tokens)));
 
-  fromElisp = elisp:
+  parseElisp = elisp:
+    parseElisp' (tokenizeElisp elisp);
+
+  fromElisp' = ast:
     let
-      ast = parseElisp elisp;
       readObject = object:
         if isList object.value then
           map readObject object.value
@@ -505,7 +510,12 @@ let
           object.value;
     in
       map readObject ast;
+
+  fromElisp = elisp:
+    fromElisp' (parseElisp elisp);
+
 in
 {
   inherit tokenizeElisp parseElisp fromElisp;
+  inherit tokenizeElisp' parseElisp' fromElisp';
 }
