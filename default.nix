@@ -46,7 +46,7 @@ let
       # placed _first_ inside a bracket expression.
       notInSymbol = '']["'`,#;\\()[:space:][:cntrl:]'';
 
-      matchComment = mkMatcher "(;[^\n]*[\n]).*" commentMaxLength;
+      matchComment = mkMatcher "(;[^\n]*).*" commentMaxLength;
 
       matchString = mkMatcher ''("([^"\\]|\\.)*").*'' stringMaxLength;
 
