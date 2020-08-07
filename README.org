@@ -9,7 +9,8 @@ An Emacs Lisp reader in Nix. Yes, it's /necessary/.
 
 * Functionality
 
-  ~fromElisp~ provides two main functions: ~fromElisp~ and ~parseElisp~.
+  ~fromElisp~ provides four main functions: ~fromElisp~, ~parseElisp~,
+  ~fromOrgModeBabelElisp~ and ~parseOrgModeBabelElisp~.
 
   - *fromElisp* /elisp/ (string)
 
@@ -71,6 +72,18 @@ An Emacs Lisp reader in Nix. Yes, it's /necessary/.
        }]
     #+end_src
 
+  - *fromOrgModeBabelElisp* /text/ (string)
+
+    ~fromElisp~, but for Org mode babel files. Runs ~fromElisp~ on the
+    result of tangling all Elisp code blocks with ~:tangle "yes"~
+    set. Tangling is done internally, not by Org mode.
+
+  - *parseOrgModeBabelElisp* /text/ (string)
+
+    ~parseElisp~, but for Org mode babel files. Runs ~parseElisp~ on the
+    result of tangling all Elisp code blocks with ~:tangle "yes"~
+    set. Tangling is done internally, not by Org mode.
+
 *** Other functions
 
     - *tokenizeElisp* /elisp/ (string)
@@ -104,6 +117,12 @@ An Emacs Lisp reader in Nix. Yes, it's /necessary/.
 
       An alternate version of ~fromElisp~ which takes as its argument an
       AST produced by ~parseElisp~.
+
+    - *tokenizeOrgModeBabelElisp* /text/ (string)
+
+      Run tokenizeElisp' on all Elisp code blocks (with `:tangle "yes"`
+      set) from Org mode babel text /text/.
+
 
 * Usage
 
