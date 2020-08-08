@@ -75,13 +75,13 @@ An Emacs Lisp reader in Nix. Yes, it's /necessary/.
   - *fromOrgModeBabelElisp* /text/ (string)
 
     ~fromElisp~, but for Org mode babel files. Runs ~fromElisp~ on the
-    result of tangling all Elisp code blocks with ~:tangle "yes"~
+    result of tangling all Elisp code blocks with ~:tangle yes~
     set. Tangling is done internally, not by Org mode.
 
   - *parseOrgModeBabelElisp* /text/ (string)
 
     ~parseElisp~, but for Org mode babel files. Runs ~parseElisp~ on the
-    result of tangling all Elisp code blocks with ~:tangle "yes"~
+    result of tangling all Elisp code blocks with ~:tangle yes~
     set. Tangling is done internally, not by Org mode.
 
 *** Other functions
@@ -120,9 +120,26 @@ An Emacs Lisp reader in Nix. Yes, it's /necessary/.
 
     - *tokenizeOrgModeBabelElisp* /text/ (string)
 
-      Run tokenizeElisp' on all Elisp code blocks (with `:tangle "yes"`
+      Run tokenizeElisp' on all Elisp code blocks (with ~:tangle yes~
       set) from Org mode babel text /text/.
 
+    - *tokenizeOrgModeBabelElisp'* /defaultArgs/ (attrs) /text/ (string)
+
+      An alternate version of ~tokenizeOrgModeBabelElisp~ which allows
+      the specification of default arguments for Org babel
+      headers. Currently only ~:tangle~ is supported.
+
+    - *parseOrgBabelElisp'* /defaultArgs/ (attrs) /text/ (string)
+
+      An alternate version of ~parseOrgBabelElisp~ which allows
+      the specification of default arguments for Org babel
+      headers. Currently only ~:tangle~ is supported.
+
+    - *fromOrgBabelElisp'* /defaultArgs/ (attrs) /text/ (string)
+
+      An alternate version of ~fromOrgModeBabelElisp~ which allows
+      the specification of default arguments for Org babel
+      headers. Currently only ~:tangle~ is supported.
 
 * Usage
 

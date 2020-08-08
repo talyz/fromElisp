@@ -671,15 +671,20 @@ let
         }
         (stringToCharacters text)).acc;
 
-  # Run tokenizeElisp' on all Elisp code blocks (with `:tangle "yes"`
-  # set) from an Org mode babel text.
-  tokenizeOrgModeBabelElisp = text:
+  # Run tokenizeElisp' on all Elisp code blocks (with `:tangle yes`
+  # set) from an Org mode babel text. If the block doesn't have a
+  # `tangle` attribute, it's determined by `defaultArgs`.
+  tokenizeOrgModeBabelElisp' = defaultArgs: text:
     let
       codeBlocks =
         filter
           (block:
-            elem block.language [ "elisp" "emacs-lisp" ]
-              && (block.flags.":tangle" or "no") == "yes")
+            let
+              tangle = toLower (block.flags.":tangle" or defaultArgs.":tangle" or "no");
+              language = toLower block.language;
+            in
+              elem language [ "elisp" "emacs-lisp" ]
+                && elem tangle [ "yes" ''"yes"'' ])
           (parseOrgModeBabel text);
       in
         foldl'
@@ -692,8 +697,19 @@ let
           []
           codeBlocks;
 
+  tokenizeOrgModeBabelElisp =
+    tokenizeOrgModeBabelElisp' {
+      ":tangle" = "no";
+    };
+
+  parseOrgModeBabelElisp' = defaultArgs: text:
+    parseElisp' (tokenizeOrgModeBabelElisp' defaultArgs text);
+
   parseOrgModeBabelElisp = text:
     parseElisp' (tokenizeOrgModeBabelElisp text);
+
+  fromOrgModeBabelElisp' = defaultArgs: text:
+    fromElisp' (parseOrgModeBabelElisp' defaultArgs text);
 
   fromOrgModeBabelElisp = text:
     fromElisp' (parseOrgModeBabelElisp text);
@@ -703,4 +719,5 @@ in
   inherit tokenizeElisp parseElisp fromElisp;
   inherit tokenizeElisp' parseElisp' fromElisp';
   inherit tokenizeOrgModeBabelElisp parseOrgModeBabelElisp fromOrgModeBabelElisp;
+  inherit tokenizeOrgModeBabelElisp' parseOrgModeBabelElisp' fromOrgModeBabelElisp';
 }
