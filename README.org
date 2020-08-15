@@ -178,3 +178,16 @@ An Emacs Lisp reader in Nix. Yes, it's /necessary/.
 
     If you plan on contributing to ~fromElisp~ and want to do it from
     your own source, you can import it as a [[https://git-scm.com/book/en/v2/Git-Tools-Submodules][Git submodule]].
+
+* Limitations
+
+  - No Unicode support
+
+    Nix doesn't support Unicode, so we can't either.
+
+  - No evaluation
+
+    This is a /reader/ and not an /evaluator/. You can make some pretty
+    reasonable assumptions from the structure of the code, though:
+    it's, for example, used in the [[https://github.com/nix-community/emacs-overlay][Emacs overlay]] to implement the
+    functionality of ~emacsWithPackagesFromUsePackage~.
