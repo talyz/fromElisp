@@ -593,46 +593,22 @@ let
           else if state.readFlags then
             if flags != null then
               let
-                matchFlag = mkMatcher "([-:+][^[:space:][:cntrl:]]*).*" orgModeBabelCodeBlockArgMaxLength;
-                matchValue = mkMatcher "([^[:space:][:cntrl:]:+-][^[:space:][:cntrl:]]*).*" orgModeBabelCodeBlockArgMaxLength;
-
-                parseFlag = state: char:
+                parseFlag = state: item:
                   let
-                    rest = substring state.pos orgModeBabelCodeBlockArgMaxLength flags;
-                    flag = matchFlag rest;
-                    value = matchValue rest;
+                    prefix = if isString item then substring 0 1 item else null;
                   in
-                    if state.skip > 0 then
+                    if elem prefix [ ":" "-" "+" ] then
                       state // {
-                        pos = state.pos + 1;
-                        skip = state.skip - 1;
+                        acc = state.acc // { ${item} = true; };
+                        flag = item;
                       }
-                    else if elem char [ " " "\t" "\r" "\n" ] then
-                      state // {
-                        pos = state.pos + 1;
-                      }
-                    else if elem char [ ":" "-" "+" ] then
-                      if flag != null then
-                        state // {
-                          acc = state.acc // { ${flag} = true; };
-                          inherit flag;
-                          pos = state.pos + 1;
-                          skip = (stringLength flag) - 1;
-                        }
-                      else throw "Unrecognized token on line ${toString state.line}: ${rest}"
                     else if state.flag != null then
-                      if value != null then
-                        state // {
-                          acc = state.acc // { ${state.flag} = value; };
-                          flag = null;
-                          pos = state.pos + 1;
-                          skip = (stringLength value) - 1;
-                        }
-                      else throw "Unrecognized token on line ${toString state.line}: ${rest}"
-                    else
                       state // {
-                        pos = state.pos + 1;
-                      };
+                        acc = state.acc // { ${state.flag} = item; };
+                        flag = null;
+                      }
+                    else
+                      state;
               in
                 state // {
                   block = state.block // {
@@ -640,12 +616,10 @@ let
                       (foldl'
                         parseFlag
                         { acc = state.block.flags or {};
-                          pos = 0;
-                          skip = 0;
                           flag = null;
                           inherit (state) line;
                         }
-                        (stringToCharacters flags)).acc;
+                        (fromElisp flags)).acc;
                     startLineNumber = state.line + 1;
                   };
                   pos = state.pos + 1;
