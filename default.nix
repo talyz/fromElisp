@@ -543,7 +543,7 @@ let
       matchHeader = mkMatcher "(#[+][hH][eE][aA][dD][eE][rR][sS]?:)([[:blank:]]+).*" orgModeBabelCodeBlockHeaderMaxLength;
       matchEndCodeBlock = mkMatcher "(#[+][eE][nN][dD]_[sS][rR][cC][^\n]*).*" orgModeBabelCodeBlockHeaderMaxLength;
 
-      matchBeginCodeBlockLang = mkMatcher "[[:blank:]]*([[:alnum:]-]+).*" orgModeBabelCodeBlockHeaderMaxLength;
+      matchBeginCodeBlockLang = match "([[:blank:]]*)([[:alnum:]][[:alnum:]-]*).*";
       matchBeginCodeBlockFlags = mkMatcher "([^\n]*[\n]).*" orgModeBabelCodeBlockHeaderMaxLength;
 
       parseToken = state: char:
@@ -578,18 +578,18 @@ let
             }
           else if state.readLanguage then
             if language != null then
-              state // {
+              state // seq state.line {
                 block = state.block // {
-                  inherit language;
+                  language = elemAt language 1;
                 };
                 pos = state.pos + 1;
-                skip = (stringLength language) - 1;
+                skip = foldl' (total: string: total + (stringLength string)) 0 language;
                 leadingWhitespace = false;
                 readLanguage = false;
                 readFlags = true;
                 readBody = true;
               }
-            else throw "Language missing for code block on line ${state.line}!"
+            else throw "Language missing or invalid for code block on line ${toString state.line}!"
           else if state.readFlags then
             if flags != null then
               let
@@ -653,7 +653,7 @@ let
                   leadingWhitespace = false;
                   readFlags = false;
                 }
-            else throw "Arguments malformed for code block on line ${state.line}!"
+            else throw "Arguments malformed for code block on line ${toString state.line}!"
           else if char == "#" && state.leadingWhitespace && endCodeBlock != null then
             state // {
               acc = state.acc ++ [ state.block ];
