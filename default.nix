@@ -583,7 +583,7 @@ let
                   language = elemAt language 1;
                 };
                 pos = state.pos + 1;
-                skip = foldl' (total: string: total + (stringLength string)) 0 language;
+                skip = (foldl' (total: string: total + (stringLength string)) 0 language) - 1;
                 leadingWhitespace = false;
                 readLanguage = false;
                 readFlags = true;
