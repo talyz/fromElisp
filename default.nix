@@ -626,7 +626,8 @@ let
                   };
                   pos = state.pos + 1;
                   skip = (stringLength flags) - 1;
-                  leadingWhitespace = false;
+                  line = if char == "\n" then state.line + 1 else state.line;
+                  leadingWhitespace = char == "\n";
                   readFlags = false;
                 }
             else throw "Arguments malformed for code block on line ${toString state.line}!"
