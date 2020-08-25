@@ -539,8 +539,8 @@ let
   # `state.acc`.
   parseOrgModeBabel = text:
     let
-      matchBeginCodeBlock = mkMatcher "(#[+][bB][eE][gG][iI][nN]_[sS][rR][cC])([[:blank:]]+).*" orgModeBabelCodeBlockHeaderMaxLength;
-      matchHeader = mkMatcher "(#[+][hH][eE][aA][dD][eE][rR][sS]?:)([[:blank:]]+).*" orgModeBabelCodeBlockHeaderMaxLength;
+      matchBeginCodeBlock = mkMatcher "(#[+][bB][eE][gG][iI][nN]_[sS][rR][cC])([[:space:]]+).*" orgModeBabelCodeBlockHeaderMaxLength;
+      matchHeader = mkMatcher "(#[+][hH][eE][aA][dD][eE][rR][sS]?:)([[:space:]]+).*" orgModeBabelCodeBlockHeaderMaxLength;
       matchEndCodeBlock = mkMatcher "(#[+][eE][nN][dD]_[sS][rR][cC][^\n]*).*" orgModeBabelCodeBlockHeaderMaxLength;
 
       matchBeginCodeBlockLang = match "([[:blank:]]*)([[:alnum:]][[:alnum:]-]*).*";
