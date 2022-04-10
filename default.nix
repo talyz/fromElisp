@@ -52,7 +52,7 @@ let
 
       matchCharacter = mkMatcher ''([?]((\\[sSHMAC]-)|\\\^)*(([^][\\()]|\\[][\\()])|\\[^^SHMACNuUx0-7]|\\[uU][[:digit:]a-fA-F]+|\\x[[:digit:]a-fA-F]*|\\[0-7]{1,3}|\\N\{[^}]+}))([${notInSymbol}?]|$).*'' characterMaxLength;
 
-      matchNonBase10Integer = mkMatcher ''(#([BOX]|[[:digit:]]{1,2}r)[[:digit:]a-fA-F]+)([${notInSymbol}]|$).*'' integerMaxLength;
+      matchNonBase10Integer = mkMatcher ''(#([BbOoXx]|[[:digit:]]{1,2}r)[[:digit:]a-fA-F]+)([${notInSymbol}]|$).*'' integerMaxLength;
 
       matchInteger = mkMatcher ''([+-]?[[:digit:]]+[.]?)([${notInSymbol}]|$).*'' integerMaxLength;
 
