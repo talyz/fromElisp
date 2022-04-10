@@ -305,7 +305,7 @@ let
             }
           else if token.type == "integer" then
             token // {
-              value = fromJSON (removeStrings ["+"] token.value);
+              value = fromJSON (removeStrings ["+" "."] token.value);
             }
           else if token.type == "symbol" && token.value == "t" then
             token // {
