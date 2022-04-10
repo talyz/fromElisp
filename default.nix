@@ -58,7 +58,7 @@ let
 
       matchBoolVector = mkMatcher ''(#&[[:digit:]]+"([^"\\]|\\.)*").*'' boolVectorMaxLength;
 
-      matchFloat = mkMatcher ''([+-]?([[:digit:]]*[.][[:digit:]]+|([[:digit:]]*[.])?[[:digit:]]+e([[:digit:]]+|[+](INF|NaN))))([${notInSymbol}]|$).*'' floatMaxLength;
+      matchFloat = mkMatcher ''([+-]?([[:digit:]]*[.][[:digit:]]+|([[:digit:]]*[.])?[[:digit:]]+e([+-]?[[:digit:]]+|[+](INF|NaN))))([${notInSymbol}]|$).*'' floatMaxLength;
 
       matchDot = mkMatcher ''([.])([${notInSymbol}]|$).*'' 2;
 
@@ -313,11 +313,18 @@ let
             }
           else if token.type == "float" then
             let
-              initial = head (match "([+-]?([[:digit:]]*[.])?[[:digit:]]+(e[+-]?[[:digit:]]+)?)" token.value);
+              initial = head (match "([+-]?([[:digit:]]*[.])?[[:digit:]]+(e([+-]?[[:digit:]]+|[+](INF|NaN)))?)" token.value);
+              isSpecial = (match "(.+(e[+](INF|NaN)))" initial) != null;
               withoutPlus = removeStrings ["+"] initial;
-              withPrefix = if substring 0 1 withoutPlus == "." then "0" + withoutPlus else withoutPlus;
+              withPrefix =
+                if substring 0 1 withoutPlus == "." then
+                  "0" + withoutPlus
+                else if substring 0 2 withoutPlus == "-." then
+                  "-0" + removeStrings ["-"] withoutPlus
+                else
+                  withoutPlus;
             in
-              if withPrefix != null then
+              if !isSpecial && withPrefix != null then
                 token // {
                   value = fromJSON withPrefix;
                 }
