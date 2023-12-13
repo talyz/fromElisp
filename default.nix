@@ -1,4 +1,5 @@
-{ pkgs ? import <nixpkgs> {}
+{ lib ? pkgs.lib
+, pkgs ? import <nixpkgs> { }
 , commentMaxLength ? 300
 , stringMaxLength ? 3000
 , characterMaxLength ? 50
@@ -10,10 +11,13 @@
 , orgModeBabelCodeBlockArgMaxLength ? 30
 }:
 
-with pkgs.lib;
-with builtins;
-
 let
+  inherit (lib)
+    substring length replaceStrings genList head const max elem seq
+    stringLength stringToCharacters tail elemAt isList
+    isString toLower
+    ;
+  inherit (builtins) match foldl' filter fromJSON;
 
   # Create a matcher from a regex string and maximum length. A
   # matcher takes a string and returns the first match produced by
@@ -61,6 +65,8 @@ let
       matchFloat = mkMatcher ''([+-]?([[:digit:]]*[.][[:digit:]]+|([[:digit:]]*[.])?[[:digit:]]+e([+-]?[[:digit:]]+|[+](INF|NaN))))([${notInSymbol}]|$).*'' floatMaxLength;
 
       matchDot = mkMatcher ''([.])([${notInSymbol}]|$).*'' 2;
+
+      matchFunction = throw "matchFunction: Not implemented";
 
       # Symbols can contain pretty much any characters - the general
       # rule is that if nothing else matches, it's a symbol, so we
