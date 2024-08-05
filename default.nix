@@ -40,53 +40,53 @@ let
 
   # Split a string of elisp into individual tokens and add useful
   # metadata.
-  tokenizeElisp' = { elisp, startLineNumber ? 1 }:
+  tokenizeElisp' = let
+    # These are the only characters that can not be unescaped in a
+    # symbol name. We match the inverse of these to get the actual
+    # symbol characters and use them to differentiate between
+    # symbols and tokens that could potentially look like symbols,
+    # such as numbers. Due to the leading bracket, this has to be
+    # placed _first_ inside a bracket expression.
+    notInSymbol = '']["'`,#;\\()[:space:][:cntrl:]'';
+
+    matchComment = mkMatcher "(;[^\n]*).*" commentMaxLength;
+
+    matchString = mkMatcher ''("([^"\\]|\\.)*").*'' stringMaxLength;
+
+    matchCharacter = mkMatcher ''([?]((\\[sSHMAC]-)|\\\^)*(([^][\\()]|\\[][\\()])|\\[^^SHMACNuUx0-7]|\\[uU][[:digit:]a-fA-F]+|\\x[[:digit:]a-fA-F]*|\\[0-7]{1,3}|\\N\{[^}]+}))([${notInSymbol}?]|$).*'' characterMaxLength;
+
+    matchNonBase10Integer = mkMatcher ''(#([BbOoXx]|[[:digit:]]{1,2}r)[[:digit:]a-fA-F]+)([${notInSymbol}]|$).*'' integerMaxLength;
+
+    matchInteger = mkMatcher ''([+-]?[[:digit:]]+[.]?)([${notInSymbol}]|$).*'' integerMaxLength;
+
+    matchBoolVector = mkMatcher ''(#&[[:digit:]]+"([^"\\]|\\.)*").*'' boolVectorMaxLength;
+
+    matchFloat = mkMatcher ''([+-]?([[:digit:]]*[.][[:digit:]]+|([[:digit:]]*[.])?[[:digit:]]+e([+-]?[[:digit:]]+|[+](INF|NaN))))([${notInSymbol}]|$).*'' floatMaxLength;
+
+    matchDot = mkMatcher ''([.])([${notInSymbol}]|$).*'' 2;
+
+    matchFunction = throw "matchFunction: Not implemented";
+
+    # Symbols can contain pretty much any characters - the general
+    # rule is that if nothing else matches, it's a symbol, so we
+    # should be pretty generous here and match for symbols last. See
+    # https://www.gnu.org/software/emacs/manual/html_node/elisp/Symbol-Type.html
+    matchSymbol =
+      let
+        symbolChar = ''([^${notInSymbol}]|\\.)'';
+      in mkMatcher ''(${symbolChar}+)([${notInSymbol}]|$).*'' symbolMaxLength;
+
+    maxTokenLength = foldl' max 0 [
+      commentMaxLength
+      stringMaxLength
+      characterMaxLength
+      integerMaxLength
+      floatMaxLength
+      boolVectorMaxLength
+      symbolMaxLength
+    ];
+  in { elisp, startLineNumber ? 1 }:
     let
-      # These are the only characters that can not be unescaped in a
-      # symbol name. We match the inverse of these to get the actual
-      # symbol characters and use them to differentiate between
-      # symbols and tokens that could potentially look like symbols,
-      # such as numbers. Due to the leading bracket, this has to be
-      # placed _first_ inside a bracket expression.
-      notInSymbol = '']["'`,#;\\()[:space:][:cntrl:]'';
-
-      matchComment = mkMatcher "(;[^\n]*).*" commentMaxLength;
-
-      matchString = mkMatcher ''("([^"\\]|\\.)*").*'' stringMaxLength;
-
-      matchCharacter = mkMatcher ''([?]((\\[sSHMAC]-)|\\\^)*(([^][\\()]|\\[][\\()])|\\[^^SHMACNuUx0-7]|\\[uU][[:digit:]a-fA-F]+|\\x[[:digit:]a-fA-F]*|\\[0-7]{1,3}|\\N\{[^}]+}))([${notInSymbol}?]|$).*'' characterMaxLength;
-
-      matchNonBase10Integer = mkMatcher ''(#([BbOoXx]|[[:digit:]]{1,2}r)[[:digit:]a-fA-F]+)([${notInSymbol}]|$).*'' integerMaxLength;
-
-      matchInteger = mkMatcher ''([+-]?[[:digit:]]+[.]?)([${notInSymbol}]|$).*'' integerMaxLength;
-
-      matchBoolVector = mkMatcher ''(#&[[:digit:]]+"([^"\\]|\\.)*").*'' boolVectorMaxLength;
-
-      matchFloat = mkMatcher ''([+-]?([[:digit:]]*[.][[:digit:]]+|([[:digit:]]*[.])?[[:digit:]]+e([+-]?[[:digit:]]+|[+](INF|NaN))))([${notInSymbol}]|$).*'' floatMaxLength;
-
-      matchDot = mkMatcher ''([.])([${notInSymbol}]|$).*'' 2;
-
-      matchFunction = throw "matchFunction: Not implemented";
-
-      # Symbols can contain pretty much any characters - the general
-      # rule is that if nothing else matches, it's a symbol, so we
-      # should be pretty generous here and match for symbols last. See
-      # https://www.gnu.org/software/emacs/manual/html_node/elisp/Symbol-Type.html
-      matchSymbol =
-        let
-          symbolChar = ''([^${notInSymbol}]|\\.)'';
-        in mkMatcher ''(${symbolChar}+)([${notInSymbol}]|$).*'' symbolMaxLength;
-
-      maxTokenLength = foldl' max 0 [
-        commentMaxLength
-        stringMaxLength
-        characterMaxLength
-        integerMaxLength
-        floatMaxLength
-        boolVectorMaxLength
-        symbolMaxLength
-      ];
-
       # Fold over all the characters in a string, checking for
       # matching tokens.
       #
@@ -552,15 +552,15 @@ let
   # the code block's `body` attribute, until a footer is successfully
   # matched and the block is added to the list of parsed blocks,
   # `state.acc`.
-  parseOrgModeBabel = text:
+  parseOrgModeBabel = let
+    matchBeginCodeBlock = mkMatcher "(#[+][bB][eE][gG][iI][nN]_[sS][rR][cC])([[:space:]]+).*" orgModeBabelCodeBlockHeaderMaxLength;
+    matchHeader = mkMatcher "(#[+][hH][eE][aA][dD][eE][rR][sS]?:)([[:space:]]+).*" orgModeBabelCodeBlockHeaderMaxLength;
+    matchEndCodeBlock = mkMatcher "(#[+][eE][nN][dD]_[sS][rR][cC][^\n]*).*" orgModeBabelCodeBlockHeaderMaxLength;
+
+    matchBeginCodeBlockLang = match "([[:blank:]]*)([[:alnum:]][[:alnum:]-]*).*";
+    matchBeginCodeBlockFlags = mkMatcher "([^\n]*[\n]).*" orgModeBabelCodeBlockHeaderMaxLength;
+  in text:
     let
-      matchBeginCodeBlock = mkMatcher "(#[+][bB][eE][gG][iI][nN]_[sS][rR][cC])([[:space:]]+).*" orgModeBabelCodeBlockHeaderMaxLength;
-      matchHeader = mkMatcher "(#[+][hH][eE][aA][dD][eE][rR][sS]?:)([[:space:]]+).*" orgModeBabelCodeBlockHeaderMaxLength;
-      matchEndCodeBlock = mkMatcher "(#[+][eE][nN][dD]_[sS][rR][cC][^\n]*).*" orgModeBabelCodeBlockHeaderMaxLength;
-
-      matchBeginCodeBlockLang = match "([[:blank:]]*)([[:alnum:]][[:alnum:]-]*).*";
-      matchBeginCodeBlockFlags = mkMatcher "([^\n]*[\n]).*" orgModeBabelCodeBlockHeaderMaxLength;
-
       parseToken = state: char:
         let
           rest = substring state.pos orgModeBabelCodeBlockHeaderMaxLength text;
