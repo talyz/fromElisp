@@ -19,6 +19,9 @@ let
     ;
   inherit (builtins) match foldl' filter fromJSON;
 
+  # Modulo
+  mod = i: d: i - ((i / d) * d);
+
   isWhitespace = lib.flip elem [ " " "\t" "\r" ];
 
   # Create a matcher from a regex string and maximum length. A
@@ -138,11 +141,9 @@ let
             }
           else if char == "\n" then
             let
-              mod = state.line / 1000;
               newState = {
                 pos = state.pos + 1;
                 line = state.line + 1;
-                inherit mod;
               };
             in
               state // (
@@ -150,7 +151,7 @@ let
                 # doesn't have a modulo builtin, so we have to save
                 # the result of an integer division and compare
                 # between runs.
-                if mod > state.mod then
+                if mod state.line 1000 == 0 then
                   seq state.acc newState
                 else
                   newState
@@ -296,7 +297,12 @@ let
             }
           else
             throw "Unrecognized token on line ${toString state.line}: ${rest}";
-    in (builtins.foldl' readToken { acc = []; pos = 0; skip = 0; line = startLineNumber; mod = 0; } (stringToCharacters elisp)).acc;
+      in (builtins.foldl' readToken {
+        acc = [];
+        pos = 0;
+        skip = 0;
+        line = startLineNumber;
+      } (stringToCharacters elisp)).acc;
 
   tokenizeElisp = elisp:
     tokenizeElisp' { inherit elisp; };
@@ -673,18 +679,16 @@ let
             }
           else if state.readBody then
             let
-              mod = state.pos / 100;
               newState = {
                 block = state.block // {
                   body = state.block.body + char;
                 };
-                inherit mod;
                 pos = state.pos + 1;
                 line = if char == "\n" then state.line + 1 else state.line;
                 leadingWhitespace = char == "\n" || (state.leadingWhitespace && isWhitespace char);
               };
             in
-              if mod > state.mod then
+              if mod state.pos 100 == 0 then
                 state // seq state.block.body (force newState)
               else
                 state // newState
@@ -698,7 +702,6 @@ let
       (foldl'
         parseToken
         { acc = [];
-          mod = 0;
           pos = 0;
           skip = 0;
           line = 1;
