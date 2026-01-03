@@ -717,9 +717,9 @@ let
         }
         (stringToCharacters text)).acc;
 
-  # Run tokenizeElisp' on all Elisp code blocks (with `:tangle yes`
-  # set) from an Org mode babel text. If the block doesn't have a
-  # `tangle` attribute, it's determined by `defaultArgs`.
+  # Run tokenizeElisp' on all Elisp code blocks from an Org mode babel text.
+  # Includes blocks with `:tangle yes` OR `:noweb-ref` attribute.
+  # If a block doesn't have a `tangle` attribute, it's determined by `defaultArgs`.
   tokenizeOrgModeBabelElisp' = let
     isElisp = lib.flip elem [ "elisp" "emacs-lisp" ];
     doTangle = lib.flip elem [ "yes" ''"yes"'' ];
@@ -731,7 +731,8 @@ let
             let
               tangle = toLower (block.flags.":tangle" or defaultArgs.":tangle" or "no");
               language = toLower block.language;
-            in isElisp language && doTangle tangle)
+              hasNowebRef = block.flags ? ":noweb-ref";
+            in isElisp language && (doTangle tangle || hasNowebRef))
           (parseOrgModeBabel text);
       in
         foldl'
