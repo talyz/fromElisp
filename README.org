@@ -75,14 +75,16 @@ An Emacs Lisp reader in Nix. Yes, it's /necessary/.
   - *fromOrgModeBabelElisp* /text/ (string)
 
     ~fromElisp~, but for Org mode babel files. Runs ~fromElisp~ on the
-    result of tangling all Elisp code blocks with ~:tangle yes~
-    set. Tangling is done internally, not by Org mode.
+    result of tangling all Elisp code blocks that are set to be
+    tangled (e.g. ~:tangle yes~ or a file name/path). Tangling is done
+    internally, not by Org mode.
 
   - *parseOrgModeBabelElisp* /text/ (string)
 
     ~parseElisp~, but for Org mode babel files. Runs ~parseElisp~ on the
-    result of tangling all Elisp code blocks with ~:tangle yes~
-    set. Tangling is done internally, not by Org mode.
+    result of tangling all Elisp code blocks that are set to be
+    tangled (e.g. ~:tangle yes~ or a file name/path). Tangling is done
+    internally, not by Org mode.
 
 *** Other functions
 
@@ -120,8 +122,9 @@ An Emacs Lisp reader in Nix. Yes, it's /necessary/.
 
     - *tokenizeOrgModeBabelElisp* /text/ (string)
 
-      Run tokenizeElisp' on all Elisp code blocks (with ~:tangle yes~
-      set) from Org mode babel text /text/.
+      Run tokenizeElisp' on all Elisp code blocks that are set to be
+      tangled (e.g. ~:tangle yes~ or a file name/path) from Org mode
+      babel text /text/.
 
     - *tokenizeOrgModeBabelElisp'* /defaultArgs/ (attrs) /text/ (string)
 
@@ -129,13 +132,13 @@ An Emacs Lisp reader in Nix. Yes, it's /necessary/.
       the specification of default arguments for Org babel
       headers. Currently only ~:tangle~ is supported.
 
-    - *parseOrgBabelElisp'* /defaultArgs/ (attrs) /text/ (string)
+    - *parseOrgModeBabelElisp'* /defaultArgs/ (attrs) /text/ (string)
 
-      An alternate version of ~parseOrgBabelElisp~ which allows
+      An alternate version of ~parseOrgModeBabelElisp~ which allows
       the specification of default arguments for Org babel
       headers. Currently only ~:tangle~ is supported.
 
-    - *fromOrgBabelElisp'* /defaultArgs/ (attrs) /text/ (string)
+    - *fromOrgModeBabelElisp'* /defaultArgs/ (attrs) /text/ (string)
 
       An alternate version of ~fromOrgModeBabelElisp~ which allows
       the specification of default arguments for Org babel
